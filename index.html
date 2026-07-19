@@ -851,6 +851,7 @@
       <div class="source-toolbar">
         <div class="source-toggle">
           <button id="src-tab-week" class="active" onclick="setSourceScope('week')">本週派發</button>
+          <button id="src-tab-lastweek" onclick="setSourceScope('lastweek')">上週派發</button>
           <button id="src-tab-all" onclick="setSourceScope('all')">全部累積</button>
         </div>
         <div class="source-summary" id="source-summary"></div>
@@ -1398,7 +1399,7 @@ function badgeHtml(status) {
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ─── 來源預約狀況 ───
-let sourceScope = 'week'; // 'week' 本週派發 | 'all' 全部累積
+let sourceScope = 'week'; // 'week' 本週派發 | 'lastweek' 上週派發 | 'all' 全部累積
 
 // 把來源名稱中的日期數字移到最前面：影片已購客0624 → 0624影片已購客
 function reorderCampaign(name) {
@@ -1414,17 +1415,21 @@ function reorderCampaign(name) {
 // 依廣告來源（adCampaign）分組統計
 function getSourceStats(scope) {
   const wk = getWeekRange(0);
+  const lwk = getWeekRange(-1);
   const groups = {};
   records.forEach(r => {
     const src = (r.adCampaign || '').trim();
     if (!src) return; // 只統計有廣告來源的名單
     const inWeek = inDispatchWeek(r, wk.mon, wk.sun);
-    if (scope === 'week' && !inWeek) return; // 本週模式只看本週派發
-    if (!groups[src]) groups[src] = { name: src, count: 0, weekCount: 0, status: {} };
+    const inLastWeek = inDispatchWeek(r, lwk.mon, lwk.sun);
+    if (scope === 'week' && !inWeek) return;          // 本週模式只看本週派發
+    if (scope === 'lastweek' && !inLastWeek) return;  // 上週模式只看上週派發
+    if (!groups[src]) groups[src] = { name: src, count: 0, weekCount: 0, lastWeekCount: 0, status: {} };
     groups[src].count++;
     const st = r.status || '未填寫';
     groups[src].status[st] = (groups[src].status[st] || 0) + 1;
-    if (inWeek) groups[src].weekCount++; // 一律計算本週派發數
+    if (inWeek) groups[src].weekCount++;              // 一律計算本週派發數
+    if (inLastWeek) groups[src].lastWeekCount++;      // 一律計算上週派發數
   });
   // 轉陣列，來源名稱把日期提前，並依「開頭日期數字」由新到舊排序（大→小）
   return Object.values(groups)
@@ -1446,7 +1451,7 @@ function renderSourceStats() {
 
   const totalSources = stats.length;
   const totalCount = stats.reduce((s, g) => s + g.count, 0);
-  const scopeLabel = sourceScope === 'week' ? '本週派發' : '全部累積';
+  const scopeLabel = sourceScope === 'week' ? '本週派發' : sourceScope === 'lastweek' ? '上週派發' : '全部累積';
   sumEl.textContent = `共 ${totalSources} 個來源、${totalCount} 筆名單（${scopeLabel}）`;
 
   if (!stats.length) {
@@ -1454,6 +1459,7 @@ function renderSourceStats() {
     return;
   }
 
+  const badgeLabel = sourceScope === 'lastweek' ? '上週名單' : '本週名單';
   listEl.innerHTML = stats.map(g => {
     const items = STATUS_ORDER
       .filter(st => g.status[st])
@@ -1465,7 +1471,7 @@ function renderSourceStats() {
       <div class="source-item">
         <div class="source-item-top">
           <div class="source-name">${esc(g.display)}</div>
-          <div class="source-week-badge">當週名單 ${g.weekCount}</div>
+          <div class="source-week-badge">${badgeLabel} ${sourceScope === 'lastweek' ? g.lastWeekCount : g.weekCount}</div>
         </div>
         <div class="source-stats">${items || '<span class="badge badge-default">尚無狀況</span>'}</div>
       </div>
@@ -1476,6 +1482,7 @@ function renderSourceStats() {
 function setSourceScope(scope) {
   sourceScope = scope;
   document.getElementById('src-tab-week').classList.toggle('active', scope === 'week');
+  document.getElementById('src-tab-lastweek').classList.toggle('active', scope === 'lastweek');
   document.getElementById('src-tab-all').classList.toggle('active', scope === 'all');
   renderSourceStats();
 }
