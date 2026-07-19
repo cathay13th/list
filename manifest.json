@@ -1,0 +1,25 @@
+{
+  "name": "國泰蒔萃 - 名單管理系統",
+  "short_name": "蒔萃名單",
+  "description": "國泰蒔萃來客名單管理與預約追蹤系統",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f0ebe3",
+  "theme_color": "#8b6340",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
