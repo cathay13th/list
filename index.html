@@ -1425,9 +1425,30 @@ window.addEventListener('DOMContentLoaded', async () => {
   await loadData();
 
   const urlParams = new URLSearchParams(window.location.search);
-  const agentParam = urlParams.get('agent');
+  let agentParam = urlParams.get('agent');
   const statusParam = urlParams.get('status');
   const mediaParam = urlParams.get('media');
+
+  // ─── 業務身分記憶 ───
+  // 問題：iOS/Android 從主畫面捷徑啟動時，網址參數 ?agent=xxx 可能被系統丟棄，
+  //      導致業務看到全部名單。這裡把身分記在裝置上，捷徑啟動時自動還原。
+  // 規則：
+  //   1. 網址有 ?agent=xxx → 記住此身分
+  //   2. 網址有 ?agent=all → 清除記憶，恢復完整檢視（給主管/自己用）
+  //   3. 沒有參數且為「主畫面捷徑模式」→ 還原上次記住的身分
+  //   4. 一般瀏覽器分頁開啟總表 → 不受影響，仍看到全部
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  try {
+    if (agentParam === 'all' || agentParam === 'ALL') {
+      localStorage.removeItem('lockedAgent');
+      agentParam = null;
+    } else if (agentParam) {
+      localStorage.setItem('lockedAgent', agentParam);
+    } else if (isStandalone) {
+      agentParam = localStorage.getItem('lockedAgent') || null;
+    }
+  } catch (e) { /* 無痕模式等無法使用 localStorage 時忽略 */ }
 
   renderTable();
 
