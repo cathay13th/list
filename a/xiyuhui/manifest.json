@@ -1,12 +1,12 @@
 {
+  "name": "蒔萃名單 - 席育慧",
+  "short_name": "席育慧名單",
+  "start_url": "/list/a/xiyuhui/",
+  "scope": "/list/a/xiyuhui/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f0ebe3",
   "theme_color": "#8b6340",
-  "name": "蒔萃名單 - 席育慧",
-  "short_name": "席育慧名單",
-  "start_url": "/list/a/xiyuhui/",
-  "scope": "/list/",
   "icons": [
     {
       "src": "/list/icon-192.png",

@@ -1,12 +1,12 @@
 {
+  "name": "蒔萃名單 - 李思欣",
+  "short_name": "李思欣名單",
+  "start_url": "/list/a/lisixin/",
+  "scope": "/list/a/lisixin/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f0ebe3",
   "theme_color": "#8b6340",
-  "name": "蒔萃名單 - 李思欣",
-  "short_name": "李思欣名單",
-  "start_url": "/list/a/lisixin/",
-  "scope": "/list/",
   "icons": [
     {
       "src": "/list/icon-192.png",

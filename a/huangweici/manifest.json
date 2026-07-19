@@ -1,12 +1,12 @@
 {
+  "name": "蒔萃名單 - 黃偉慈",
+  "short_name": "黃偉慈名單",
+  "start_url": "/list/a/huangweici/",
+  "scope": "/list/a/huangweici/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f0ebe3",
   "theme_color": "#8b6340",
-  "name": "蒔萃名單 - 黃偉慈",
-  "short_name": "黃偉慈名單",
-  "start_url": "/list/a/huangweici/",
-  "scope": "/list/",
   "icons": [
     {
       "src": "/list/icon-192.png",

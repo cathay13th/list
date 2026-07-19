@@ -721,12 +721,16 @@
 
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
+// ─── 專屬版本用：填入業務姓名後，此檔案永遠只顯示該業務的名單 ───
+// 總表版本留空字串即可（顯示全部名單）。
+const FORCE_AGENT = '';
 const CURRENT_YEAR = 2026; // 當前主力年份，舊年份排最後
 let records = [];
 let editingId = null;
 let sortCol = 'date';
 let sortAsc = false;
 let userSortActive = false; // ★ 只有使用者主動點欄位標題才設為 true
+let LOCKED_AGENT = null;    // ★ 業務專屬模式鎖定的姓名（不依賴下拉選單，確保一定生效）
 let page = 1;
 const PAGE_SIZE = 50;
 
@@ -922,6 +926,8 @@ function getFiltered() {
   const fYear = document.getElementById('f-year-filter').value;
 
   const filtered = records.filter(r => {
+    // ★ 業務專屬模式：硬性鎖定，任何情況都只顯示該業務的名單
+    if (LOCKED_AGENT && String(r.agent || '').trim() !== LOCKED_AGENT) return false;
     if (q && !`${r.name}${r.phone}${r.notes}${r.region}${r.agent}`.toLowerCase().includes(q)) return false;
     if (fStatus && r.status !== fStatus) return false;
     if (fAgent && r.agent !== fAgent) return false;
@@ -1425,34 +1431,17 @@ window.addEventListener('DOMContentLoaded', async () => {
   await loadData();
 
   const urlParams = new URLSearchParams(window.location.search);
-  let agentParam = urlParams.get('agent');
+  // 身分判定順序：檔案寫死的 FORCE_AGENT 優先，其次才看網址參數。
+  // 寫死的好處：主畫面捷徑啟動時不依賴網址參數，iOS/Android 都不會失效。
+  let agentParam = FORCE_AGENT || urlParams.get('agent') || null;
+  if (agentParam === 'all' || agentParam === 'ALL') agentParam = null;
   const statusParam = urlParams.get('status');
   const mediaParam = urlParams.get('media');
-
-  // ─── 業務身分記憶 ───
-  // 問題：iOS/Android 從主畫面捷徑啟動時，網址參數 ?agent=xxx 可能被系統丟棄，
-  //      導致業務看到全部名單。這裡把身分記在裝置上，捷徑啟動時自動還原。
-  // 規則：
-  //   1. 網址有 ?agent=xxx → 記住此身分
-  //   2. 網址有 ?agent=all → 清除記憶，恢復完整檢視（給主管/自己用）
-  //   3. 沒有參數且為「主畫面捷徑模式」→ 還原上次記住的身分
-  //   4. 一般瀏覽器分頁開啟總表 → 不受影響，仍看到全部
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-    || window.navigator.standalone === true;
-  try {
-    if (agentParam === 'all' || agentParam === 'ALL') {
-      localStorage.removeItem('lockedAgent');
-      agentParam = null;
-    } else if (agentParam) {
-      localStorage.setItem('lockedAgent', agentParam);
-    } else if (isStandalone) {
-      agentParam = localStorage.getItem('lockedAgent') || null;
-    }
-  } catch (e) { /* 無痕模式等無法使用 localStorage 時忽略 */ }
 
   renderTable();
 
   if (agentParam) {
+    LOCKED_AGENT = String(agentParam).trim(); // ★ 啟用硬性鎖定
     document.getElementById('f-agent').value = agentParam;
     document.querySelector('.toolbar').style.display = 'none';
     document.getElementById('stats-bar').style.display = 'none';

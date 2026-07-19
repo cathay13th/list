@@ -1,12 +1,12 @@
 {
+  "name": "蒔萃名單 - 許智華",
+  "short_name": "許智華名單",
+  "start_url": "/list/a/xuzhihua/",
+  "scope": "/list/a/xuzhihua/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f0ebe3",
   "theme_color": "#8b6340",
-  "name": "蒔萃名單 - 許智華",
-  "short_name": "許智華名單",
-  "start_url": "/list/a/xuzhihua/",
-  "scope": "/list/",
   "icons": [
     {
       "src": "/list/icon-192.png",
