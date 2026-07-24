@@ -687,9 +687,9 @@
   <div style="width:1px;background:rgba(139,115,85,0.2);margin:4px 0"></div>
   <div class="stat"><div class="stat-num" id="s-lastweek" style="color:var(--text2)">—</div><div class="stat-label">上週名單</div></div>
   <div class="stat"><div class="stat-num" id="s-today-dispatch" style="color:var(--accent2)">—</div><div class="stat-label">當日派發名單</div></div>
-  <div class="stat stat-revisit" onclick="filterRevisit()" title="歸屬期內重複留單且尚未派發，點擊篩選">
+  <div class="stat stat-revisit" onclick="filterRevisit()" title="歸屬期內重複留單且尚未派發，點擊篩選／再點一次還原">
     <div class="stat-num" id="s-revisit" style="color:var(--text3)">—</div>
-    <div class="stat-label">🔁 待處理回訪</div>
+    <div class="stat-label">🔁 重複名單</div>
   </div>
   <div class="stat">
     <div class="stat-num" id="s-week" style="color:var(--accent)">—</div>
@@ -726,7 +726,7 @@
     <option value="">全部名單</option>
     <option value="dup">🔁 只看重複留單</option>
     <option value="dup-active">🔁 只看歸屬期內重複</option>
-    <option value="revisit">🔁 只看待處理回訪</option>
+    <option value="revisit">🔁 只看重複名單（未派發）</option>
   </select>
   <select class="filter" id="f-year-filter" onchange="renderTable()">
     <option value="">全部年份</option>
@@ -1099,7 +1099,7 @@ function hasActiveDup(r) {
   });
 }
 
-// 待處理回訪：當前年度、歸屬期內有重複留單、且尚未派發
+// 重複名單（待處理）：當前年度、歸屬期內有重複留單、且尚未派發
 function isPendingRevisit(r) {
   if (parseInt(r.year || 0) < CURRENT_YEAR) return false;
   if (String(r.dispatch || '').trim()) return false;
@@ -1228,22 +1228,29 @@ function clearFilters() {
   renderTable();
 }
 
-// ─── 待處理回訪：一鍵篩選 ───
+// ─── 重複名單：一鍵篩選（再點一次還原）───
 function filterRevisit() {
+  const fd = document.getElementById('f-dup');
+  // 已在重複名單模式 → 再點一次還原全部名單
+  if (fd && fd.value === 'revisit') {
+    clearFilters();
+    showToast('已還原全部名單', 'success');
+    return;
+  }
   document.getElementById('search').value = '';
   document.getElementById('f-status').value = '';
   document.getElementById('f-agent').value = '';
   document.getElementById('f-media').value = '';
   document.getElementById('f-date').value = '';
   document.getElementById('f-year-filter').value = '';
-  document.getElementById('f-dup').value = 'revisit';
+  fd.value = 'revisit';
   sortCol = 'date';
   sortAsc = false;
   userSortActive = false;
   page = 1;
   renderTable();
   const n = records.filter(isPendingRevisit).length;
-  showToast(n ? `已篩出 ${n} 筆待處理回訪` : '目前沒有待處理的回訪名單', n ? 'success' : 'error');
+  showToast(n ? `已篩出 ${n} 筆重複名單，再點一次還原` : '目前沒有未派發的重複名單', n ? 'success' : 'error');
   document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1304,7 +1311,7 @@ function renderTable() {
       (r.dispatch || '').trim() === todayStr && parseInt(r.year || 0) === thisYear
     ).length;
 
-    // 待處理回訪：歸屬期內重複且尚未派發
+    // 重複名單：歸屬期內重複且尚未派發
     const revisitCount = records.filter(isPendingRevisit).length;
     const revEl = document.getElementById('s-revisit');
     if (revEl) {
