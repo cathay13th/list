@@ -135,6 +135,13 @@
   }
   .stat-revisit { cursor: pointer; transition: opacity .2s; }
   .stat-revisit:hover { opacity: .7; }
+  /* 交接名單按鈕啟用狀態 */
+  .handover-on {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: #faf6f0 !important;
+    font-weight: 600;
+  }
   .toolbar {
     padding: 14px 24px;
     display: flex;
@@ -734,6 +741,7 @@
   <select class="filter" id="f-date" onchange="renderTable()">
     <option value="">全部日期</option>
   </select>
+  <button class="btn" id="btn-handover" onclick="toggleHandover()" style="display:none">📋 交接名單</button>
   <button class="btn" onclick="clearFilters()">清除篩選</button>
   <button class="btn" onclick="exportCSV()">匯出 CSV</button>
 </div>
@@ -911,6 +919,9 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv
 // ─── 專屬版本用：填入業務姓名後，此檔案永遠只顯示該業務的名單 ───
 // 總表版本留空字串即可（顯示全部名單）。
 const FORCE_AGENT = '';
+// ─── 交接名單標記：備註含此字串者，視為離職業務交接過來的名單 ───
+const HANDOVER_TAG = '[原:許智華]';
+let handoverOnly = false;
 const CURRENT_YEAR = 2026; // 當前主力年份，舊年份排最後
 let records = [];
 let editingId = null;
@@ -1192,6 +1203,7 @@ function getFiltered() {
     if (fDup === 'dup' && getDupRecords(r.phone, r.id).length === 0) return false;
     if (fDup === 'dup-active' && !hasActiveDup(r)) return false;
     if (fDup === 'revisit' && !isPendingRevisit(r)) return false;
+    if (handoverOnly && !String(r.notes || '').includes(HANDOVER_TAG)) return false;
     return true;
   });
 
@@ -1213,6 +1225,7 @@ function sortBy(col) {
 }
 
 function clearFilters() {
+  handoverOnly = false;
   document.getElementById('search').value = '';
   document.getElementById('f-status').value = '';
   document.getElementById('f-agent').value = '';
@@ -1237,6 +1250,7 @@ function filterRevisit() {
     showToast('已還原全部名單', 'success');
     return;
   }
+  handoverOnly = false;
   document.getElementById('search').value = '';
   document.getElementById('f-status').value = '';
   document.getElementById('f-agent').value = '';
@@ -1251,6 +1265,49 @@ function filterRevisit() {
   renderTable();
   const n = records.filter(isPendingRevisit).length;
   showToast(n ? `已篩出 ${n} 筆重複名單，再點一次還原` : '目前沒有未派發的重複名單', n ? 'success' : 'error');
+  document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ─── 交接名單：計數 / 按鈕狀態 / 一鍵篩選 ───
+// 判斷依據為備註是否含 HANDOVER_TAG，由 handover.html 派發時寫入。
+function countHandover() {
+  return records.filter(r =>
+    (!LOCKED_AGENT || String(r.agent || '').trim() === LOCKED_AGENT) &&
+    String(r.notes || '').includes(HANDOVER_TAG)
+  ).length;
+}
+
+function updateHandoverBtn() {
+  const n = countHandover();
+  ['btn-handover', 'btn-handover-agent'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    if (n === 0) { b.style.display = 'none'; return; }
+    b.style.display = '';
+    b.textContent = '📋 交接名單 ' + n;
+    b.classList.toggle('handover-on', handoverOnly);
+  });
+}
+
+function toggleHandover() {
+  const n = countHandover();
+  if (!handoverOnly && n === 0) { showToast('目前沒有交接名單', 'error'); return; }
+  handoverOnly = !handoverOnly;
+  document.getElementById('search').value = '';
+  document.getElementById('f-status').value = '';
+  const sa = document.getElementById('search-agent'); if (sa) sa.value = '';
+  const ssa = document.getElementById('f-status-agent'); if (ssa) ssa.value = '';
+  const fm = document.getElementById('f-media'); if (fm) fm.value = '';
+  const fdt = document.getElementById('f-date'); if (fdt) fdt.value = '';
+  const fy = document.getElementById('f-year-filter'); if (fy) fy.value = '';
+  const fdup = document.getElementById('f-dup'); if (fdup) fdup.value = '';
+  const fag = document.getElementById('f-agent'); if (fag && !LOCKED_AGENT) fag.value = '';
+  sortCol = 'date';
+  sortAsc = false;
+  userSortActive = false;
+  page = 1;
+  renderTable();
+  showToast(handoverOnly ? '只顯示交接名單 ' + n + ' 筆，再點一次還原' : '已還原全部名單', 'success');
   document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1411,6 +1468,8 @@ function renderTable() {
     const el = document.getElementById('sort-'+c);
     if (el) el.textContent = sortCol===c ? (sortAsc?'↑':'↓') : '';
   });
+
+  updateHandoverBtn();
 }
 
 function changePage(p) {
@@ -1960,6 +2019,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.btn-source').forEach(b => b.style.display = 'none');
 
     window.clearFilters = function() {
+      handoverOnly = false;
       document.getElementById('search').value = '';
       document.getElementById('f-status').value = '';
       document.getElementById('f-media').value = '';
@@ -1998,12 +2058,21 @@ window.addEventListener('DOMContentLoaded', async () => {
       renderTable();
     });
 
+    // 交接名單按鈕（沒有交接名單時自動隱藏，由 updateHandoverBtn 控制）
+    const handoverBtn = document.createElement('button');
+    handoverBtn.className = 'btn';
+    handoverBtn.id = 'btn-handover-agent';
+    handoverBtn.style.display = 'none';
+    handoverBtn.textContent = '📋 交接名單';
+    handoverBtn.addEventListener('click', toggleHandover);
+
     const nameSpan = document.createElement('span');
     nameSpan.style.cssText = 'font-size:13px;color:var(--accent);font-weight:600;margin-left:auto;';
     nameSpan.textContent = '👤 ' + agentParam + ' 的名單';
 
     agentBar.appendChild(searchInput);
     agentBar.appendChild(statusSel);
+    agentBar.appendChild(handoverBtn);
     agentBar.appendChild(nameSpan);
     document.querySelector('.toolbar').insertAdjacentElement('afterend', agentBar);
   }
