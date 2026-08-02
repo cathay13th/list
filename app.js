@@ -13,7 +13,7 @@ document.body.insertAdjacentHTML('afterbegin', `
 <header>
   <div class="logo">
     <div class="logo-dot"></div>
-    [國泰蒔萃] - 名單管理系統
+    國泰蒔萃名單管理系統
   </div>
   <div class="header-right">
     <div class="sync-status">
