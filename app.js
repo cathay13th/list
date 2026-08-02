@@ -258,8 +258,8 @@ document.body.insertAdjacentHTML('afterbegin', `
 `);
 
 
-// ⚠️ 換成你自己 Apps Script 的部署網址
-const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv80053MjRuw360O.../exec';
+// ⚠️ Apps Script 的部署網址（已填入完整正確網址）
+const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
 const FORCE_AGENT = (typeof window.FORCE_AGENT === 'string') ? window.FORCE_AGENT : '';
 const HANDOVER_TAG = '[原:離職業務姓名]';
 const HANDOVER_START = new Date('2000-01-01T00:00:00+08:00');
