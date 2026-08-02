@@ -351,12 +351,11 @@ function normalizeMediaName(m) {
   // 7. 路過
   if (s.includes('路過')) return '路過';
   
-    // 8. 霖園集團介紹（先判斷是否有集團關鍵字）
+  // 8. 霖園集團介紹（先判斷集團關鍵字，避免被通用介紹攔截）
   if (s.includes('國泰') || s.includes('霖園')) return '霖園集團介紹';
-
-  // 9. 親友/客戶介紹（其餘帶有「介紹」的歸此類）
+  
+  // 9. 親友/客戶介紹
   if (s.includes('介紹')) return '親友/客戶介紹';
-
   
   // 10. 來電類
   if (s.includes('來電')) return '來電';
