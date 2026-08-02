@@ -273,8 +273,8 @@ document.body.insertAdjacentHTML('afterbegin', `
 // ⚠️ Apps Script 的部署網址（已填入完整正確網址）
 const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
 const FORCE_AGENT = (typeof window.FORCE_AGENT === 'string') ? window.FORCE_AGENT : '';
-const HANDOVER_TAG = '[原:離職業務姓名]';
-const HANDOVER_START = new Date('2000-01-01T00:00:00+08:00');
+const HANDOVER_TAG = '[原:許智華]';
+const HANDOVER_START = new Date('2026-08-03T00:00:00+08:00');
 let handoverOnly = false;
 const CURRENT_YEAR = 2026;
 let records = [];
