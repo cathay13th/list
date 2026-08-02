@@ -1,5 +1,5 @@
 /* ==========================================================================
-   [案名] 名單管理系統 — 共用主程式
+   國泰蒔萃 名單管理系統 — 共用主程式
    ========================================================================== */
 
 /* ── 版面：原本寫在 index.html <body> 裡的 HTML，改由這裡注入 ── */
@@ -169,8 +169,20 @@ document.body.insertAdjacentHTML('afterbegin', `
         </div>
         <div class="form-group">
           <label class="form-label">媒體</label>
-          <input class="form-input" type="text" id="f-media-input" placeholder="官網" list="media-list">
-          <datalist id="media-list"></datalist>
+          <select class="form-select" id="f-media-input">
+            <option value="">請選擇媒體</option>
+            <option>FB</option>
+            <option>Google</option>
+            <option>591</option>
+            <option>Line</option>
+            <option>國建官網</option>
+            <option>創意家官網</option>
+            <option>POP</option>
+            <option>路過</option>
+            <option>親友/客戶介紹</option>
+            <option>霖園集團介紹</option>
+            <option>來電</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">跑單業務</label>
@@ -311,6 +323,46 @@ function parseApptLegacy(raw) {
   return { date: s, time: '' };
 }
 
+// ─── 媒體名稱同義詞清洗與對照 (Mapping) ───
+function normalizeMediaName(m) {
+  if (!m || m === 'null') return '未填';
+  let s = String(m).trim().replace(/\s+/g, ''); // 移除多餘空白
+  let lower = s.toLowerCase();
+
+  // 1. FB 廣告系列
+  if (/^fb/i.test(lower) || lower.includes('facebook')) return 'FB';
+  
+  // 2. Google
+  if (lower.includes('google')) return 'Google';
+  
+  // 3. 591
+  if (s.includes('591')) return '591';
+  
+  // 4. Line
+  if (/^line/i.test(lower)) return 'Line';
+  
+  // 5. 官網類
+  if (s.includes('創意家官網')) return '創意家官網';
+  if (s.includes('國建官網') || s === '官網') return '國建官網';
+  
+  // 6. POP 類（基地/工地/POP來電等）
+  if (s.includes('pop') || s.includes('基地') || s.includes('工地')) return 'POP';
+  
+  // 7. 路過
+  if (s.includes('路過')) return '路過';
+  
+  // 8. 親友/客戶介紹
+  if (s.includes('介紹')) return '親友/客戶介紹';
+  
+  // 9. 霖園集團介紹
+  if (s.includes('國泰') || s.includes('霖園')) return '霖園集團介紹';
+  
+  // 10. 來電類
+  if (s.includes('來電')) return '來電';
+
+  return s; // 若有特殊例外則保留原字串
+}
+
 function normalizeRecord(r) {
   if (r.apptTime) {
     const t = String(r.apptTime).trim();
@@ -334,6 +386,10 @@ function normalizeRecord(r) {
   } else {
     r.apptDate = '';
   }
+
+  // 自動清洗與統一媒體名稱
+  r.media = normalizeMediaName(r.media);
+
   r.apptTime = r.apptTime || '';
   return r;
 }
@@ -388,14 +444,6 @@ function setSyncStatus(state) {
     dot.style.background = 'var(--danger)';
     label.textContent = '連線失敗';
   }
-}
-
-function normalizeMediaName(m) {
-  if (!m) return '未填';
-  const s = String(m).trim();
-  const lower = s.toLowerCase();
-  if (lower === 'fb' || lower === 'facebook') return 'FB';
-  return s;
 }
 
 function dateToNum(dateStr) {
@@ -883,7 +931,6 @@ function populateFilters() {
   fd.innerHTML = '<option value="">全部日期</option>' + dates.map(d=>`<option ${d===curD?'selected':''}>${d}</option>`).join('');
 
   document.getElementById('agent-list').innerHTML = agents.map(a=>`<option value="${a}">`).join('');
-  document.getElementById('media-list').innerHTML = medias.map(m=>`<option value="${m}">`).join('');
   document.getElementById('region-list').innerHTML = regions.map(r=>`<option value="${r}">`).join('');
 }
 
@@ -1215,7 +1262,7 @@ function openModal(id) {
     document.getElementById('f-appt-date').value = '';
     document.getElementById('f-appt-time').value = '';
     document.getElementById('fg-appt').classList.remove('show');
-    document.getElementById('f-media-input').value = '官網';
+    document.getElementById('f-media-input').value = '國建官網';
     document.getElementById('f-agent-input').value = '';
     const today = new Date();
     document.getElementById('f-dispatch').value = (today.getMonth()+1) + '/' + today.getDate();
