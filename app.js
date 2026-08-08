@@ -1,5 +1,11 @@
 /* ==========================================================================
-   國泰蒔萃 名單管理系統 — 共用主程式
+   [案名] 名單管理系統 — 共用主程式
+   --------------------------------------------------------------------------
+   這是唯一需要維護的檔案。總表與各業務專屬頁全部載入這一份。
+   要改功能、改版面、改按鈕，都只動這裡，改完重新上傳這一個檔案即可。
+
+   各業務的 index.html 只是外殼，裡面唯一的差別是一行 window.FORCE_AGENT。
+   殼檔設定好之後基本上不用再動。
    ========================================================================== */
 
 /* ── 版面：原本寫在 index.html <body> 裡的 HTML，改由這裡注入 ── */
@@ -13,7 +19,7 @@ document.body.insertAdjacentHTML('afterbegin', `
 <header>
   <div class="logo">
     <div class="logo-dot"></div>
-    國泰蒔萃名單管理系統
+    [案名] - 名單管理系統
   </div>
   <div class="header-right">
     <div class="sync-status">
@@ -36,13 +42,17 @@ document.body.insertAdjacentHTML('afterbegin', `
   <div style="width:1px;background:rgba(139,115,85,0.2);margin:4px 0"></div>
   <div class="stat"><div class="stat-num" id="s-lastweek" style="color:var(--text2)">—</div><div class="stat-label">上週名單</div></div>
   <div class="stat"><div class="stat-num" id="s-today-dispatch" style="color:var(--accent2)">—</div><div class="stat-label">當日派發名單</div></div>
-  <div class="stat stat-revisit" onclick="filterRevisit()" title="歸屬期內重複留單且尚未派發，點擊篩選／再點一次還原">
-    <div class="stat-num" id="s-revisit" style="color:var(--text3)">—</div>
-    <div class="stat-label">🔁 重複名單</div>
+  <div class="stat" title="本週把狀況改成「已預約」的組數（依狀況更新時間認列）">
+    <div class="stat-num" id="s-week-booked" style="color:var(--purple)">—</div>
+    <div class="stat-label">本週預約</div>
   </div>
   <div class="stat">
     <div class="stat-num" id="s-week" style="color:var(--accent)">—</div>
-    <div class="stat-label">本週新增</div>
+    <div class="stat-label">本週新增名單</div>
+  </div>
+  <div class="stat stat-revisit" onclick="filterRevisit()" title="歸屬期內重複留單且尚未派發，點擊篩選／再點一次還原">
+    <div class="stat-num" id="s-revisit" style="color:var(--text3)">—</div>
+    <div class="stat-label">🔁 重複名單</div>
   </div>
   <div class="stat" style="min-width:140px">
     <div class="stat-label">本週名單來源</div>
@@ -169,20 +179,8 @@ document.body.insertAdjacentHTML('afterbegin', `
         </div>
         <div class="form-group">
           <label class="form-label">媒體</label>
-          <select class="form-select" id="f-media-input">
-            <option value="">請選擇媒體</option>
-            <option>FB</option>
-            <option>Google</option>
-            <option>591</option>
-            <option>Line</option>
-            <option>國建官網</option>
-            <option>創意家官網</option>
-            <option>POP</option>
-            <option>路過</option>
-            <option>親友/客戶介紹</option>
-            <option>霖園集團介紹</option>
-            <option>來電</option>
-          </select>
+          <input class="form-input" type="text" id="f-media-input" placeholder="官網" list="media-list">
+          <datalist id="media-list"></datalist>
         </div>
         <div class="form-group">
           <label class="form-label">跑單業務</label>
@@ -270,33 +268,26 @@ document.body.insertAdjacentHTML('afterbegin', `
 `);
 
 
-// ⚠️ Apps Script 的部署網址（已填入完整正確網址）
-const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
+// ⚠️ 換成你自己 Apps Script 的部署網址（部署 → 管理部署作業 → 複製網址）
+const API_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+// ─── 業務身分：由各自的 index.html 殼檔設定 window.FORCE_AGENT ───
+// 殼檔沒設或設空字串 = 總表版（顯示全部名單）。
 const FORCE_AGENT = (typeof window.FORCE_AGENT === 'string') ? window.FORCE_AGENT : '';
-const HANDOVER_TAG = '[原:許智華]';
-const HANDOVER_START = new Date('2026-08-03T00:00:00+08:00');
+// ─── 交接名單標記：備註含此字串者，視為離職業務交接過來的名單 ───
+const HANDOVER_TAG = '[原:離職業務姓名]';   // ⚠️ 沒有交接需求就不用管，按鈕會自動隱藏
+// ─── 交接名單按鈕生效時間（此時刻之前按鈕一律隱藏）───
+// 時區務必明寫 +08:00，避免業務電腦時區設定造成早一天或晚一天。
+const HANDOVER_START = new Date('2000-01-01T00:00:00+08:00'); // ⚠️ 要延後生效才改成未來日期，時區必寫 +08:00
 let handoverOnly = false;
-const CURRENT_YEAR = 2026;
+const CURRENT_YEAR = 2026; // 當前主力年份，舊年份排最後
 let records = [];
 let editingId = null;
 let sortCol = 'date';
 let sortAsc = false;
-let userSortActive = false;
-let LOCKED_AGENT = null;
+let userSortActive = false; // ★ 只有使用者主動點欄位標題才設為 true
+let LOCKED_AGENT = null;    // ★ 業務專屬模式鎖定的姓名（不依賴下拉選單，確保一定生效）
 let page = 1;
 const PAGE_SIZE = 50;
-
-// ─── 電話號碼中間碼遮蔽 ───
-function maskPhone(p) {
-  if (!p) return '—';
-  const s = String(p).trim();
-  if (s.length === 10) {
-    return s.slice(0, 4) + '***' + s.slice(7);
-  } else if (s.length > 6) {
-    return s.slice(0, 3) + '***' + s.slice(-3);
-  }
-  return s;
-}
 
 // ─── 解析舊格式預約欄位 ───
 function parseApptLegacy(raw) {
@@ -323,46 +314,6 @@ function parseApptLegacy(raw) {
   return { date: s, time: '' };
 }
 
-// ─── 媒體名稱同義詞清洗與對照 (Mapping) ───
-function normalizeMediaName(m) {
-  if (!m || m === 'null') return '未填';
-  let s = String(m).trim().replace(/\s+/g, ''); // 移除多餘空白
-  let lower = s.toLowerCase();
-
-  // 1. FB 廣告系列
-  if (/^fb/i.test(lower) || lower.includes('facebook')) return 'FB';
-  
-  // 2. Google
-  if (lower.includes('google')) return 'Google';
-  
-  // 3. 591
-  if (s.includes('591')) return '591';
-  
-  // 4. Line
-  if (/^line/i.test(lower)) return 'Line';
-  
-  // 5. 官網類
-  if (s.includes('創意家官網')) return '創意家官網';
-  if (s.includes('國建官網') || s === '官網') return '國建官網';
-  
-  // 6. POP 類（基地/工地/POP來電等）
-  if (s.includes('pop') || s.includes('基地') || s.includes('工地')) return 'POP';
-  
-  // 7. 路過
-  if (s.includes('路過')) return '路過';
-  
-  // 8. 霖園集團介紹（先判斷集團關鍵字，避免被通用介紹攔截）
-  if (s.includes('國泰') || s.includes('霖園')) return '霖園集團介紹';
-  
-  // 9. 親友/客戶介紹
-  if (s.includes('介紹')) return '親友/客戶介紹';
-  
-  // 10. 來電類
-  if (s.includes('來電')) return '來電';
-
-  return s; // 若有特殊例外則保留原字串
-}
-
 function normalizeRecord(r) {
   if (r.apptTime) {
     const t = String(r.apptTime).trim();
@@ -386,10 +337,6 @@ function normalizeRecord(r) {
   } else {
     r.apptDate = '';
   }
-
-  // 自動清洗與統一媒體名稱
-  r.media = normalizeMediaName(r.media);
-
   r.apptTime = r.apptTime || '';
   return r;
 }
@@ -446,14 +393,25 @@ function setSyncStatus(state) {
   }
 }
 
+// ─── 媒體名稱標準化（合併同義詞，如 FB / facebook） ───
+function normalizeMediaName(m) {
+  if (!m) return '未填';
+  const s = String(m).trim();
+  const lower = s.toLowerCase();
+  if (lower === 'fb' || lower === 'facebook') return 'FB';
+  return s;
+}
+
+
 function dateToNum(dateStr) {
   const parts = (dateStr || '').split('/').map(Number);
   return (parts[0] || 0) * 100 + (parts[1] || 0);
 }
 
 // ─── 重複留單偵測 ───
+// OWNERSHIP_DAYS：客戶歸屬期（天）。期間內同一支電話再次留單，視為原業務的客戶。
 const OWNERSHIP_DAYS = 180;
-let phoneIndex = {};
+let phoneIndex = {};   // 正規化電話 → [記錄]
 
 function normPhone(v) {
   if (v === null || v === undefined) return '';
@@ -466,6 +424,7 @@ function normPhone(v) {
   return t;
 }
 
+// 由 年份 + 日期(M/D) 組出 Date，供歸屬期計算
 function recDate(r) {
   const parts = String(r.date || '').split('/').map(Number);
   const y = parseInt(r.year || 0);
@@ -482,6 +441,7 @@ function buildPhoneIndex() {
   });
 }
 
+// 取得同電話的其他記錄（依日期新到舊）
 function getDupRecords(phone, excludeId) {
   const p = normPhone(phone);
   if (!p || p.length < 9) return [];
@@ -493,11 +453,13 @@ function getDupRecords(phone, excludeId) {
     });
 }
 
+// 距今天數（正數＝過去幾天前）
 function daysAgo(d) {
   if (!d) return null;
   return Math.floor((new Date().setHours(0,0,0,0) - d.setHours(0,0,0,0)) / 86400000);
 }
 
+// 該筆是否有「歸屬期內」的重複留單
 function hasActiveDup(r) {
   return getDupRecords(r.phone, r.id).some(o => {
     const dd = daysAgo(recDate(o));
@@ -505,12 +467,15 @@ function hasActiveDup(r) {
   });
 }
 
+// 重複名單（待處理）：當前年度、歸屬期內有重複留單、且尚未派發
 function isPendingRevisit(r) {
   if (parseInt(r.year || 0) < CURRENT_YEAR) return false;
   if (String(r.dispatch || '').trim()) return false;
   return hasActiveDup(r);
 }
 
+// ─── 週區間計算（共用：本週統計、來源分析都用這組）───
+// offset=0 為本週、-1 為上週；一律以「派發日」對照週一~週日
 function getWeekRange(offset) {
   const now = new Date();
   const day = now.getDay() || 7;
@@ -520,7 +485,7 @@ function getWeekRange(offset) {
   sun.setHours(23,59,59,999);
   return { mon, sun };
 }
-
+// 依「派發日 + 年份」判斷某筆名單是否落在指定週區間內
 function inDispatchWeek(r, mon, sun) {
   const dispStr = r.dispatch || "";
   const parts = dispStr.split("/");
@@ -530,20 +495,43 @@ function inDispatchWeek(r, mon, sun) {
   return d >= mon && d <= sun;
 }
 
+// ─── 時間戳解析 ───
+// 後端 O 欄寫入格式為 "2026-08-08 17:30:00"。
+// Safari 對 "-" 分隔的字串解析不穩，統一換成 "/" 再交給 Date。
+function parseStamp(s) {
+  const t = String(s || '').trim();
+  if (!t) return null;
+  const d = new Date(t.replace(/-/g, '/'));
+  return isNaN(d) ? null : d;
+}
+
+// ─── 核心排序函式 ───
+// 規則：
+// 1. 2026（當前年） > 舊年份（2025以前）
+// 2. 同為當前年：無 status（新進未派發）優先 → 再依「日期遞減」
+// 3. 同為舊年份：依「日期遞減」
+// 4. 使用者手動點欄位標題時，僅在「同區塊內」覆寫排序
 function defaultSort(a, b) {
   const aIsOld = parseInt(a.year || 0) < CURRENT_YEAR;
   const bIsOld = parseInt(b.year || 0) < CURRENT_YEAR;
+
+  // 舊年份永遠排後面
   if (aIsOld !== bIsOld) return aIsOld ? 1 : -1;
+
   if (!aIsOld && !bIsOld) {
+    // 同為當前年：派發日為空（未派發）排前面
     const aNoDispatch = !a.dispatch;
     const bNoDispatch = !b.dispatch;
     if (aNoDispatch !== bNoDispatch) return aNoDispatch ? -1 : 1;
   }
+
+  // 同區塊內：依日期遞減（年份相同時只比月日）
   const ya = parseInt(a.year || 0), yb = parseInt(b.year || 0);
   if (ya !== yb) return yb - ya;
   return dateToNum(b.date) - dateToNum(a.date);
 }
 
+// 使用者手動點欄位時的排序（保留年份分層）
 function userSort(a, b, col, asc) {
   const aIsOld = parseInt(a.year || 0) < CURRENT_YEAR;
   const bIsOld = parseInt(b.year || 0) < CURRENT_YEAR;
@@ -559,6 +547,7 @@ function userSort(a, b, col, asc) {
   return asc ? av.localeCompare(bv, 'zh-TW') : bv.localeCompare(av, 'zh-TW');
 }
 
+// ─── 篩選 & 排序 ───
 function getFiltered() {
   const q = document.getElementById('search').value.toLowerCase();
   const fStatus = document.getElementById('f-status').value;
@@ -570,6 +559,7 @@ function getFiltered() {
   const fDup = fDupEl ? fDupEl.value : '';
 
   const filtered = records.filter(r => {
+    // ★ 業務專屬模式：硬性鎖定，任何情況都只顯示該業務的名單
     if (LOCKED_AGENT && String(r.agent || '').trim() !== LOCKED_AGENT) return false;
     if (q && !`${r.name}${r.phone}${r.notes}${r.region}${r.agent}`.toLowerCase().includes(q)) return false;
     if (fStatus && r.status !== fStatus) return false;
@@ -584,6 +574,7 @@ function getFiltered() {
     return true;
   });
 
+  // 使用者有主動點欄位標題 → userSort；否則永遠用 defaultSort
   filtered.sort((a, b) => {
     if (userSortActive) return userSort(a, b, sortCol, sortAsc);
     return defaultSort(a, b);
@@ -595,7 +586,7 @@ function getFiltered() {
 function sortBy(col) {
   if (sortCol === col) sortAsc = !sortAsc;
   else { sortCol = col; sortAsc = false; }
-  userSortActive = true;
+  userSortActive = true; // ★ 使用者主動點欄位
   page = 1;
   renderTable();
 }
@@ -609,15 +600,18 @@ function clearFilters() {
   document.getElementById('f-date').value = '';
   document.getElementById('f-year-filter').value = '';
   const fd = document.getElementById('f-dup'); if (fd) fd.value = '';
+  // 清除篩選同時重置為預設排序
   sortCol = 'date';
   sortAsc = false;
-  userSortActive = false;
+  userSortActive = false; // ★ 回到預設排序
   page = 1;
   renderTable();
 }
 
+// ─── 重複名單：一鍵篩選（再點一次還原）───
 function filterRevisit() {
   const fd = document.getElementById('f-dup');
+  // 已在重複名單模式 → 再點一次還原全部名單
   if (fd && fd.value === 'revisit') {
     clearFilters();
     showToast('已還原全部名單', 'success');
@@ -641,6 +635,8 @@ function filterRevisit() {
   document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// ─── 交接名單：計數 / 按鈕狀態 / 一鍵篩選 ───
+// 判斷依據為備註是否含 HANDOVER_TAG，由 handover.html 派發時寫入。
 function countHandover() {
   return records.filter(r =>
     (!LOCKED_AGENT || String(r.agent || '').trim() === LOCKED_AGENT) &&
@@ -648,6 +644,9 @@ function countHandover() {
   ).length;
 }
 
+// ─── 預約日期 → Date 物件 ───
+// apptDate 可能是 "8/5" 或 "2026/8/5"。沒帶年份時以今年推定，
+// 若推出來的日期距今超過半年，判定為跨年，往前或往後修正一年。
 function apptToDate(r) {
   const s = String(r.apptDate || '').trim();
   if (!s) return null;
@@ -670,6 +669,11 @@ function apptToDate(r) {
   return d;
 }
 
+// ─── 業務端本週統計 ───
+// 刻意不看「聯絡狀況」欄位：狀態常常不會即時更新，拿它算來訪會失真。
+// 兩個數字都只依賴「有沒有填預約日期」，業務有約就會填，資料才準。
+//   本週約訪 = 本週派發的名單中，已填預約日期的組數（本週成果）
+//   本週到訪 = 預約日期落在本週的組數（本週要接待幾組，含舊名單）
 function updateAgentStats() {
   const box = document.getElementById('agent-week-stats');
   if (!box) return;
@@ -680,7 +684,10 @@ function updateAgentStats() {
   const { mon, sun } = getWeekRange(0);
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
+  // 本週派發且有預約日
   const booked = mine.filter(r => inDispatchWeek(r, mon, sun) && apptToDate(r)).length;
+
+  // 預約日落在本週
   const visits = mine.filter(r => {
     const d = apptToDate(r);
     return d && d >= mon && d <= sun;
@@ -700,6 +707,7 @@ function updateAgentStats() {
 }
 
 function updateHandoverBtn() {
+  // 生效時間未到：按鈕一律隱藏，順便把篩選狀態歸零避免卡住
   if (new Date() < HANDOVER_START) {
     handoverOnly = false;
     ['btn-handover', 'btn-handover-agent'].forEach(id => {
@@ -742,6 +750,7 @@ function toggleHandover() {
   document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// ─── 聯絡狀況統計渲染（本週／上週共用）───
 function renderStatusBreakdown(elId, recs, emptyText) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -765,7 +774,7 @@ function renderStatusBreakdown(elId, recs, emptyText) {
   el.title = items.join('、') || emptyText;
 }
 
-// ─── 渲染列表 ───
+// ─── 渲染 ───
 function renderTable() {
   buildPhoneIndex();
   const filtered = getFiltered();
@@ -774,6 +783,7 @@ function renderTable() {
   if (page > totalPages) page = totalPages;
   const slice = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
 
+  // 統計數字
   const sTotal = document.getElementById('s-total');
   if (sTotal) {
     sTotal.textContent = records.length;
@@ -789,6 +799,7 @@ function renderTable() {
     document.getElementById('s-week').textContent = thisWeekRecords.length;
     document.getElementById('s-lastweek').textContent = lastWeekRecords.length;
 
+    // 當日派發名單：派發日等於今天（且限定今年，避免 2025/2024 等歷年同一天被一併計入）
     const today = new Date();
     const todayStr = (today.getMonth()+1) + '/' + today.getDate();
     const thisYear = today.getFullYear();
@@ -796,6 +807,19 @@ function renderTable() {
       (r.dispatch || '').trim() === todayStr && parseInt(r.year || 0) === thisYear
     ).length;
 
+    // 本週預約：本週把狀況改成「已預約」的組數
+    // 依後端寫入的 bookedAt（O 欄／狀況更新時間）認列，與名單是哪一週派發無關。
+    // 舊名單本週約到也算；本週約到後再改成已來訪，時間戳不清除，一樣算。
+    const bookedEl = document.getElementById('s-week-booked');
+    if (bookedEl) {
+      const weekBooked = records.filter(r => {
+        const d = parseStamp(r.bookedAt);
+        return d && d >= thisWeek.mon && d <= thisWeek.sun;
+      }).length;
+      bookedEl.textContent = weekBooked;
+    }
+
+    // 重複名單：歸屬期內重複且尚未派發
     const revisitCount = records.filter(isPendingRevisit).length;
     const revEl = document.getElementById('s-revisit');
     if (revEl) {
@@ -804,8 +828,10 @@ function renderTable() {
       revEl.style.fontWeight = revisitCount > 0 ? '700' : '600';
     }
 
+    // 本週 / 上週聯絡狀況統計（依派發日區間）
     renderStatusBreakdown('s-week-status', thisWeekRecords, '本週尚無名單');
 
+    // 本週新增依媒體分類統計（FB / facebook 視為同一類）
     const mediaCount = {};
     thisWeekRecords.forEach(r => {
       const m = normalizeMediaName(r.media);
@@ -842,12 +868,14 @@ function renderTable() {
       const isOld = parseInt(r.year || 0) < CURRENT_YEAR;
       const isNewUnassigned = !isOld && !r.dispatch;
 
+      // 插入年份分隔線（當年份切換時）
       if (yr !== lastYear) {
         const label = isOld ? `▾ ${yr} 年舊名單` : `▾ ${yr} 年`;
         html += `<tr class="year-divider"><td colspan="13">${label}</td></tr>`;
         lastYear = yr;
       }
 
+      // 重複留單標記
       const dups = getDupRecords(r.phone, r.id);
       const activeDup = dups.some(o => { const dd = daysAgo(recDate(o)); return dd !== null && dd <= OWNERSHIP_DAYS; });
       const dupFlag = dups.length
@@ -860,7 +888,7 @@ function renderTable() {
           <td style="color:var(--text3);font-size:12px">${esc(yr)}</td>
           <td style="color:var(--text2);font-size:12px">${r.date || '—'}</td>
           <td style="font-weight:500">${esc(r.name)}${dupFlag}</td>
-          <td style="font-family:monospace;color:var(--text2)">${esc(maskPhone(r.phone))}</td>
+          <td style="font-family:monospace;color:var(--text2)">${esc(r.phone)}</td>
           <td style="color:var(--text2)">${esc(r.region)}</td>
           <td>${badgeHtml(r.status)}</td>
           <td style="color:var(--text2)">${esc(r.media)}</td>
@@ -931,6 +959,7 @@ function populateFilters() {
   fd.innerHTML = '<option value="">全部日期</option>' + dates.map(d=>`<option ${d===curD?'selected':''}>${d}</option>`).join('');
 
   document.getElementById('agent-list').innerHTML = agents.map(a=>`<option value="${a}">`).join('');
+  document.getElementById('media-list').innerHTML = medias.map(m=>`<option value="${m}">`).join('');
   document.getElementById('region-list').innerHTML = regions.map(r=>`<option value="${r}">`).join('');
 }
 
@@ -942,42 +971,45 @@ function badgeHtml(status) {
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ─── 來源預約狀況 ───
-let sourceScope = 'week';
+let sourceScope = 'week'; // 'week' 本週派發 | 'lastweek' 上週派發 | 'all' 全部累積
 
+// 把來源名稱中的日期數字移到最前面：影片已購客0624 → 0624影片已購客
 function reorderCampaign(name) {
   const s = String(name || '').trim();
   if (!s) return s;
-  const m = s.match(/(\d{2,})/);
+  const m = s.match(/(\d{2,})/); // 第一組 2 碼以上數字視為日期
   if (!m) return s;
   const num = m[1];
   const rest = s.replace(num, '').trim();
   return num + rest;
 }
 
+// 依廣告來源（adCampaign）分組統計
 function getSourceStats(scope) {
   const wk = getWeekRange(0);
   const lwk = getWeekRange(-1);
   const groups = {};
   records.forEach(r => {
     const src = (r.adCampaign || '').trim();
-    if (!src) return;
+    if (!src) return; // 只統計有廣告來源的名單
     const inWeek = inDispatchWeek(r, wk.mon, wk.sun);
     const inLastWeek = inDispatchWeek(r, lwk.mon, lwk.sun);
-    if (scope === 'week' && !inWeek) return;
-    if (scope === 'lastweek' && !inLastWeek) return;
+    if (scope === 'week' && !inWeek) return;          // 本週模式只看本週派發
+    if (scope === 'lastweek' && !inLastWeek) return;  // 上週模式只看上週派發
     if (!groups[src]) groups[src] = { name: src, count: 0, weekCount: 0, lastWeekCount: 0, status: {} };
     groups[src].count++;
     const st = r.status || '未填寫';
     groups[src].status[st] = (groups[src].status[st] || 0) + 1;
-    if (inWeek) groups[src].weekCount++;
-    if (inLastWeek) groups[src].lastWeekCount++;
+    if (inWeek) groups[src].weekCount++;              // 一律計算本週派發數
+    if (inLastWeek) groups[src].lastWeekCount++;      // 一律計算上週派發數
   });
+  // 轉陣列，來源名稱把日期提前，並依「開頭日期數字」由新到舊排序（大→小）
   return Object.values(groups)
     .map(g => Object.assign(g, { display: reorderCampaign(g.name) }))
     .sort((a, b) => {
       const na = parseInt((a.display.match(/^\d+/) || ['0'])[0], 10);
       const nb = parseInt((b.display.match(/^\d+/) || ['0'])[0], 10);
-      if (na !== nb) return nb - na;
+      if (na !== nb) return nb - na; // 日期數字大（較新）排前面
       return a.display.localeCompare(b.display, 'zh-Hant');
     });
 }
@@ -1036,6 +1068,7 @@ function closeSourceModal() {
   document.getElementById('source-modal').classList.remove('open');
 }
 
+// ─── 上週狀況面板（聯絡狀況 / 名單來源 / 名單區域）───
 function countBy(recs, keyFn) {
   const map = {};
   recs.forEach(r => {
@@ -1045,6 +1078,9 @@ function countBy(recs, keyFn) {
   return map;
 }
 
+// ─── 區域名稱正規化 ───
+// 規則：台中市內細分到「區」；未寫區者歸「台中市」；
+//       台中以外依 彰化 / 南投 / 新竹 / 苗栗 / 雙北桃基 / 南部 / 東部 / 離島 分群
 const TC_DISTRICTS = ['西屯','南屯','北屯','豐原','東勢','大甲','清水','沙鹿','梧棲','后里','神岡','潭子','大雅','新社','石岡','外埔','大安','烏日','大肚','龍井','霧峰','太平','大里','和平','中區','東區','南區','西區','北區'];
 const REGION_GROUPS = [
   { label: '雙北桃基', keys: ['台北','臺北','新北','桃園','基隆','中壢','板橋','三重','新莊'] },
@@ -1062,10 +1098,12 @@ function normalizeRegionName(raw) {
   if (!s) return '未填';
   s = s.replace(/^(台灣|臺灣|台灣省|臺灣省)/, '');
 
+  // 1. 先判斷台中以外的縣市（避免「台南市東區」被誤判成台中東區）
   for (const g of REGION_GROUPS) {
     if (g.keys.some(k => s.includes(k))) return g.label;
   }
 
+  // 2. 台中市內：比對行政區（長字串優先，避免西屯 / 西區互相誤判）
   const isTC = /台中|臺中/.test(s);
   const sorted = [...TC_DISTRICTS].sort((a, b) => b.length - a.length);
   for (const d of sorted) {
@@ -1075,10 +1113,13 @@ function normalizeRegionName(raw) {
     }
   }
 
+  // 3. 只寫台中、臺中市、台中市 → 統一歸「台中市」
   if (isTC) return '台中市';
-  return s;
+
+  return s; // 無法歸類者保留原值
 }
 
+// 名單來源 × 聯絡狀況 交叉表
 function buildSourceStatusTable(recs) {
   if (!recs.length) return '<span class="lw-empty">上週尚無名單</span>';
 
@@ -1093,8 +1134,10 @@ function buildSourceStatusTable(recs) {
     colSet[st] = true;
   });
 
+  // 欄位順序：依 STATUS_ORDER，其餘自訂狀況排最後；只顯示實際出現過的狀況
   const cols = STATUS_ORDER.filter(st => colSet[st])
     .concat(Object.keys(colSet).filter(st => !STATUS_ORDER.includes(st)));
+
 
   const sorted = Object.entries(rows).sort((a, b) => b[1].total - a[1].total);
 
@@ -1112,6 +1155,7 @@ function buildSourceStatusTable(recs) {
     html += `<td class="lw-sum">${o.total}</td></tr>`;
   });
 
+  // 合計列
   const tot = { total: recs.length, st: {} };
   cols.forEach(st => {
     tot.st[st] = sorted.reduce((s, [, o]) => s + (o.st[st] || 0), 0);
@@ -1131,22 +1175,26 @@ function renderLastWeekModal() {
   document.getElementById('lw-range').innerHTML =
     `<span>派發期間 ${fmt(mon)}（一）～ ${fmt(sun)}（日）</span><span>共 <b>${recs.length}</b> 筆名單</span>`;
 
+  // 聯絡狀況（依固定順序 + 顏色 badge）
   const stCount = countBy(recs, r => r.status || '未填寫');
   const stEl = document.getElementById('lw-status');
   const stItems = STATUS_ORDER.filter(st => stCount[st]).map(st => {
     const cls = ['待確認','未接','已來訪','已預約','無需求','空號'].includes(st) ? 'badge-'+st : 'badge-default';
     return `<span class="badge ${cls}">${esc(st)} ${stCount[st]}</span>`;
   });
-
+  // 補上不在 STATUS_ORDER 內的自訂狀況
   Object.keys(stCount).filter(st => !STATUS_ORDER.includes(st)).forEach(st => {
     stItems.push(`<span class="badge badge-default">${esc(st)} ${stCount[st]}</span>`);
   });
   stEl.innerHTML = stItems.length ? stItems.join('') : '<span class="lw-empty">上週尚無名單</span>';
 
+  // 名單來源 × 聯絡狀況 交叉表（媒體，FB / facebook 合併）
   document.getElementById('lw-media').innerHTML = buildSourceStatusTable(recs);
 
+  // 名單區域
   const rgCount = countBy(recs, r => normalizeRegionName(r.region));
   const rgEl = document.getElementById('lw-region');
+  // 排序：台中相關優先（台中市 → 各區），其餘依數量遞減，「未填」永遠最後
   const TC_LABELS = new Set(TC_DISTRICTS.map(d => d.endsWith('區') ? d : d + '區'));
   const rgRank = g => (g === '未填' ? 3 : g === '台中市' ? 0 : TC_LABELS.has(g) ? 1 : 2);
   const rgItems = Object.entries(rgCount)
@@ -1164,6 +1212,7 @@ function closeLastWeekModal() {
   document.getElementById('lastweek-modal').classList.remove('open');
 }
 
+// ─── 編輯視窗：重複留單提示 ───
 function checkDuplicate() {
   const box = document.getElementById('fg-dup');
   if (!box) return;
@@ -1241,6 +1290,7 @@ function openModal(id) {
     document.getElementById('f-dispatch').value = r.dispatch || '';
     document.getElementById('f-notes').value = r.notes || '';
 
+    // 廣告來源活動（唯讀顯示，只有同步進來且有值的名單才顯示）
     const adGroup = document.getElementById('fg-ad-campaign');
     if (r.adCampaign) {
       document.getElementById('f-ad-campaign-display').textContent = r.adCampaign;
@@ -1262,12 +1312,12 @@ function openModal(id) {
     document.getElementById('f-appt-date').value = '';
     document.getElementById('f-appt-time').value = '';
     document.getElementById('fg-appt').classList.remove('show');
-    document.getElementById('f-media-input').value = '國建官網';
+    document.getElementById('f-media-input').value = '官網';
     document.getElementById('f-agent-input').value = '';
     const today = new Date();
     document.getElementById('f-dispatch').value = (today.getMonth()+1) + '/' + today.getDate();
     document.getElementById('f-notes').value = '';
-    document.getElementById('fg-ad-campaign').style.display = 'none';
+    document.getElementById('fg-ad-campaign').style.display = 'none'; // 新增名單一律沒有廣告活動資料
     del.style.display = 'none';
     document.getElementById('fg-dup').style.display = 'none';
   }
@@ -1303,6 +1353,7 @@ async function saveRecord() {
     apptDate,
     apptTime,
     eventId: editingId ? ((records.find(r=>r.id===editingId)||{}).eventId || '') : '',
+    // 廣告來源為唯讀欄位，儲存時沿用原值，避免編輯/派發後被覆蓋清空
     adCampaign: editingId ? ((records.find(r=>r.id===editingId)||{}).adCampaign || '') : '',
   };
 
@@ -1403,18 +1454,21 @@ window.addEventListener('DOMContentLoaded', async () => {
   await loadData();
 
   const urlParams = new URLSearchParams(window.location.search);
+  // 身分判定順序：檔案寫死的 FORCE_AGENT 優先，其次才看網址參數。
+  // 寫死的好處：主畫面捷徑啟動時不依賴網址參數，iOS/Android 都不會失效。
   let agentParam = FORCE_AGENT || urlParams.get('agent') || null;
   if (agentParam === 'all' || agentParam === 'ALL') agentParam = null;
   const statusParam = urlParams.get('status');
   const mediaParam = urlParams.get('media');
 
+  // 交接名單按鈕：生效時間若在 24 小時內，掛個計時器讓它自動亮起，不必重新整理
   const _hoWait = HANDOVER_START - new Date();
   if (_hoWait > 0 && _hoWait < 86400000) setTimeout(updateHandoverBtn, _hoWait + 1000);
 
   renderTable();
 
   if (agentParam) {
-    LOCKED_AGENT = String(agentParam).trim();
+    LOCKED_AGENT = String(agentParam).trim(); // ★ 啟用硬性鎖定
     document.getElementById('f-agent').value = agentParam;
     document.querySelector('.toolbar').style.display = 'none';
     document.getElementById('stats-bar').style.display = 'none';
@@ -1460,6 +1514,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       renderTable();
     });
 
+    // 交接名單按鈕（沒有交接名單時自動隱藏，由 updateHandoverBtn 控制）
     const handoverBtn = document.createElement('button');
     handoverBtn.className = 'btn';
     handoverBtn.id = 'btn-handover-agent';
@@ -1471,6 +1526,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     nameSpan.style.cssText = 'font-size:13px;color:var(--accent);font-weight:600;margin-left:auto;';
     nameSpan.textContent = '👤 ' + agentParam + ' 的名單';
 
+    // 本週統計（約訪 / 到訪），內容由 updateAgentStats 填入
     const weekStats = document.createElement('div');
     weekStats.id = 'agent-week-stats';
     weekStats.className = 'agent-week-stats';
