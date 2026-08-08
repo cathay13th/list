@@ -1,5 +1,5 @@
 /* ==========================================================================
-   [案名] 名單管理系統 — 共用主程式
+   國泰蒔萃名單管理系統 — 共用主程式
    --------------------------------------------------------------------------
    這是唯一需要維護的檔案。總表與各業務專屬頁全部載入這一份。
    要改功能、改版面、改按鈕，都只動這裡，改完重新上傳這一個檔案即可。
@@ -19,7 +19,7 @@ document.body.insertAdjacentHTML('afterbegin', `
 <header>
   <div class="logo">
     <div class="logo-dot"></div>
-    [案名] - 名單管理系統
+    國泰蒔萃名單管理系統
   </div>
   <div class="header-right">
     <div class="sync-status">
@@ -42,17 +42,13 @@ document.body.insertAdjacentHTML('afterbegin', `
   <div style="width:1px;background:rgba(139,115,85,0.2);margin:4px 0"></div>
   <div class="stat"><div class="stat-num" id="s-lastweek" style="color:var(--text2)">—</div><div class="stat-label">上週名單</div></div>
   <div class="stat"><div class="stat-num" id="s-today-dispatch" style="color:var(--accent2)">—</div><div class="stat-label">當日派發名單</div></div>
-  <div class="stat" title="本週把狀況改成「已預約」的組數（依狀況更新時間認列）">
-    <div class="stat-num" id="s-week-booked" style="color:var(--purple)">—</div>
-    <div class="stat-label">本週預約</div>
-  </div>
-  <div class="stat">
-    <div class="stat-num" id="s-week" style="color:var(--accent)">—</div>
-    <div class="stat-label">本週新增名單</div>
-  </div>
   <div class="stat stat-revisit" onclick="filterRevisit()" title="歸屬期內重複留單且尚未派發，點擊篩選／再點一次還原">
     <div class="stat-num" id="s-revisit" style="color:var(--text3)">—</div>
     <div class="stat-label">🔁 重複名單</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num" id="s-week" style="color:var(--accent)">—</div>
+    <div class="stat-label">本週新增</div>
   </div>
   <div class="stat" style="min-width:140px">
     <div class="stat-label">本週名單來源</div>
@@ -269,15 +265,15 @@ document.body.insertAdjacentHTML('afterbegin', `
 
 
 // ⚠️ 換成你自己 Apps Script 的部署網址（部署 → 管理部署作業 → 複製網址）
-const API_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
 // ─── 業務身分：由各自的 index.html 殼檔設定 window.FORCE_AGENT ───
 // 殼檔沒設或設空字串 = 總表版（顯示全部名單）。
 const FORCE_AGENT = (typeof window.FORCE_AGENT === 'string') ? window.FORCE_AGENT : '';
 // ─── 交接名單標記：備註含此字串者，視為離職業務交接過來的名單 ───
-const HANDOVER_TAG = '[原:離職業務姓名]';   // ⚠️ 沒有交接需求就不用管，按鈕會自動隱藏
+const HANDOVER_TAG = '[原:許智華]';   // ⚠️ 沒有交接需求就不用管，按鈕會自動隱藏
 // ─── 交接名單按鈕生效時間（此時刻之前按鈕一律隱藏）───
 // 時區務必明寫 +08:00，避免業務電腦時區設定造成早一天或晚一天。
-const HANDOVER_START = new Date('2000-01-01T00:00:00+08:00'); // ⚠️ 要延後生效才改成未來日期，時區必寫 +08:00
+const HANDOVER_START = new Date('2026-08-03T00:00:00+08:00'); // ⚠️ 要延後生效才改成未來日期，時區必寫 +08:00
 let handoverOnly = false;
 const CURRENT_YEAR = 2026; // 當前主力年份，舊年份排最後
 let records = [];
@@ -493,16 +489,6 @@ function inDispatchWeek(r, mon, sun) {
   const yr = parseInt(r.year || 0) || new Date().getFullYear();
   const d = new Date(yr, parseInt(parts[0])-1, parseInt(parts[1]));
   return d >= mon && d <= sun;
-}
-
-// ─── 時間戳解析 ───
-// 後端 O 欄寫入格式為 "2026-08-08 17:30:00"。
-// Safari 對 "-" 分隔的字串解析不穩，統一換成 "/" 再交給 Date。
-function parseStamp(s) {
-  const t = String(s || '').trim();
-  if (!t) return null;
-  const d = new Date(t.replace(/-/g, '/'));
-  return isNaN(d) ? null : d;
 }
 
 // ─── 核心排序函式 ───
@@ -806,18 +792,6 @@ function renderTable() {
     document.getElementById('s-today-dispatch').textContent = records.filter(r =>
       (r.dispatch || '').trim() === todayStr && parseInt(r.year || 0) === thisYear
     ).length;
-
-    // 本週預約：本週把狀況改成「已預約」的組數
-    // 依後端寫入的 bookedAt（O 欄／狀況更新時間）認列，與名單是哪一週派發無關。
-    // 舊名單本週約到也算；本週約到後再改成已來訪，時間戳不清除，一樣算。
-    const bookedEl = document.getElementById('s-week-booked');
-    if (bookedEl) {
-      const weekBooked = records.filter(r => {
-        const d = parseStamp(r.bookedAt);
-        return d && d >= thisWeek.mon && d <= thisWeek.sun;
-      }).length;
-      bookedEl.textContent = weekBooked;
-    }
 
     // 重複名單：歸屬期內重複且尚未派發
     const revisitCount = records.filter(isPendingRevisit).length;
