@@ -1,0 +1,24 @@
+{
+  "name": "蒔萃名單 - 林瑀霏",
+  "short_name": "林瑀霏名單",
+  "start_url": "/list/a/linyufei/",
+  "scope": "/list/a/linyufei/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f0ebe3",
+  "theme_color": "#8b6340",
+  "icons": [
+    {
+      "src": "/list/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/list/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

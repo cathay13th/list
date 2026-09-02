@@ -275,6 +275,10 @@ const HANDOVER_TAG = '[原:許智華]';   // ⚠️ 沒有交接需求就不用�
 // 時區務必明寫 +08:00，避免業務電腦時區設定造成早一天或晚一天。
 const HANDOVER_START = new Date('2026-08-03T00:00:00+08:00'); // ⚠️ 要延後生效才改成未來日期，時區必寫 +08:00
 let handoverOnly = false;
+// ─── 在職業務清單（新增/編輯名單時，「跑單業務」欄位的下拉建議只出現這些人）───
+// ⚠️ 有人到職或離職，只要改這一行就好。上方篩選器的「全部業務」不受影響，
+//    仍會列出所有歷史業務，方便查詢離職同仁留下的舊名單。
+const ACTIVE_AGENTS = ['席育慧', '黃偉慈', '林瑀霏'];
 const CURRENT_YEAR = 2026; // 當前主力年份，舊年份排最後
 let records = [];
 let editingId = null;
@@ -932,7 +936,9 @@ function populateFilters() {
   const curD = fd.value;
   fd.innerHTML = '<option value="">全部日期</option>' + dates.map(d=>`<option ${d===curD?'selected':''}>${d}</option>`).join('');
 
-  document.getElementById('agent-list').innerHTML = agents.map(a=>`<option value="${a}">`).join('');
+  // 「跑單業務」輸入框的建議清單改用固定的在職名單（ACTIVE_AGENTS），
+  // 不再從歷史資料彙整，避免離職同仁的名字持續出現、也讓新人一到職就能選到。
+  document.getElementById('agent-list').innerHTML = ACTIVE_AGENTS.map(a=>`<option value="${a}">`).join('');
   document.getElementById('media-list').innerHTML = medias.map(m=>`<option value="${m}">`).join('');
   document.getElementById('region-list').innerHTML = regions.map(r=>`<option value="${r}">`).join('');
 }
