@@ -4,12 +4,32 @@
    這是唯一需要維護的檔案。總表與各業務專屬頁全部載入這一份。
    要改功能、改版面、改按鈕，都只動這裡，改完重新上傳這一個檔案即可。
 
-   各業務的 index.html 只是外殼，裡面唯一的差別是一行 window.FORCE_AGENT。
-   殼檔設定好之後基本上不用再動。
+   2026/09 改版：加入密碼登入。
+   - 身分「不再」由網址或殼檔的 FORCE_AGENT 決定，改由登入的密碼決定。
+   - 看得到哪些名單由後端過濾，前端收不到別人的資料。
+   - 殼檔 a/xxx/index.html 不需要修改，裡面的 FORCE_AGENT 會被忽略（留著無害）。
    ========================================================================== */
 
 /* ── 版面：原本寫在 index.html <body> 裡的 HTML，改由這裡注入 ── */
 document.body.insertAdjacentHTML('afterbegin', `
+
+<div id="login-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg,#f0ebe3);align-items:center;justify-content:center;padding:24px;">
+  <div style="width:100%;max-width:320px;text-align:center;">
+    <div style="font-size:17px;font-weight:700;color:var(--accent,#8b6340);margin-bottom:6px;">國泰蒔萃名單管理系統</div>
+    <div style="font-size:13px;color:var(--text2,#7a6550);margin-bottom:22px;">請輸入你的密碼</div>
+    <input id="login-code" type="password" inputmode="numeric" autocomplete="current-password"
+      placeholder="密碼"
+      style="width:100%;box-sizing:border-box;padding:13px 14px;font-size:17px;text-align:center;letter-spacing:2px;border:1px solid var(--border2,#ddd5c8);border-radius:8px;background:#fff;color:var(--text,#2c2318);outline:none;">
+    <div id="login-msg" style="min-height:20px;margin-top:10px;font-size:13px;color:var(--danger,#b84040);"></div>
+    <button id="login-btn" onclick="doLoginSubmit()"
+      style="width:100%;margin-top:6px;padding:13px;font-size:15px;font-weight:600;border:none;border-radius:8px;background:var(--accent,#8b6340);color:#fff;cursor:pointer;">
+      登入
+    </button>
+    <div style="margin-top:18px;font-size:12px;color:var(--text3,#b0a090);line-height:1.6;">
+      登入後 30 天內免重新輸入<br>忘記密碼請找斤翔
+    </div>
+  </div>
+</div>
 
 <div id="loading-overlay">
   <div class="spinner"></div>
@@ -29,6 +49,7 @@ document.body.insertAdjacentHTML('afterbegin', `
     <button class="btn btn-source" onclick="openLastWeekModal()">🗓️ 上週狀況</button>
     <button class="btn btn-source" onclick="openSourceModal()">📊 來源預約狀況</button>
     <button class="btn btn-primary" onclick="openModal()">＋ 新增名單</button>
+    <button class="btn" id="btn-logout" onclick="doLogout()" title="登出">登出</button>
   </div>
 </header>
 
@@ -264,11 +285,80 @@ document.body.insertAdjacentHTML('afterbegin', `
 `);
 
 
-// ⚠️ 換成你自己 Apps Script 的部署網址（部署 → 管理部署作業 → 複製網址）
-const API_URL = 'https://script.google.com/macros/s/AKfycbz59t8cGnTBH-Kb4t6NuSjv8OO53MjRuw360C7IrkrCbxMxe1813fo8QRLyD43A-_kozw/exec';
-// ─── 業務身分：由各自的 index.html 殼檔設定 window.FORCE_AGENT ───
-// 殼檔沒設或設空字串 = 總表版（顯示全部名單）。
-const FORCE_AGENT = (typeof window.FORCE_AGENT === 'string') ? window.FORCE_AGENT : '';
+// ⚠️⚠️⚠️ 這一行一定要換成「新部署」的網址 ⚠️⚠️⚠️
+// Apps Script → 部署 → 新增部署作業 → 網頁應用程式 → 部署 → 複製網址，貼到下面取代整串。
+const API_URL = 'PASTE_NEW_DEPLOYMENT_URL_HERE';
+
+// ─── 登入狀態 ───
+// 身分完全由密碼決定。殼檔的 window.FORCE_AGENT 已不再使用（留著無害）。
+const TOKEN_KEY = 'cs_token';
+let AUTH = null;   // { name, all }
+
+function getToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch(e) { return ''; } }
+function setToken(t) { try { localStorage.setItem(TOKEN_KEY, t); } catch(e) {} }
+function clearToken() { try { localStorage.removeItem(TOKEN_KEY); } catch(e) {} }
+
+function showLogin(msg) {
+  const lo = document.getElementById('loading-overlay');
+  if (lo) lo.style.display = 'none';
+  const box = document.getElementById('login-overlay');
+  box.style.display = 'flex';
+  document.getElementById('login-msg').textContent = msg || '';
+  const input = document.getElementById('login-code');
+  input.value = '';
+  setTimeout(() => input.focus(), 100);
+}
+
+function hideLogin() {
+  document.getElementById('login-overlay').style.display = 'none';
+}
+
+async function doLoginSubmit() {
+  const input = document.getElementById('login-code');
+  const btn = document.getElementById('login-btn');
+  const msg = document.getElementById('login-msg');
+  const code = input.value.trim();
+  if (!code) { msg.textContent = '請輸入密碼'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '登入中…';
+  msg.textContent = '';
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'login', code: code })
+    });
+    const json = await res.json();
+    if (json && json.ok && json.token) {
+      setToken(json.token);
+      AUTH = { name: json.name || '', all: !!json.all };
+      if (appBooted) { location.reload(); return; }  // 換身分重登 → 整頁重來最乾淨
+      hideLogin();
+      await bootApp();
+      return;
+    }
+    if (json && json.msg === 'throttled') msg.textContent = '嘗試次數過多，請 10 分鐘後再試';
+    else if (json && json.msg === 'no_config') msg.textContent = '系統尚未設定登入資料，請找斤翔';
+    else msg.textContent = '密碼錯誤';
+  } catch (e) {
+    msg.textContent = '無法連線，請確認網路';
+  }
+  btn.disabled = false;
+  btn.textContent = '登入';
+  input.value = '';
+  input.focus();
+}
+
+function doLogout() {
+  if (!confirm('確定要登出嗎？下次進來需要重新輸入密碼。')) return;
+  clearToken();
+  location.reload();
+}
+
+// ─── 業務身分：改由登入結果決定（保留變數名稱，下方邏輯不用動）───
+const FORCE_AGENT = '';
 // ─── 交接名單標記：備註含此字串者，視為離職業務交接過來的名單 ───
 const HANDOVER_TAG = '[原:許智華]';   // ⚠️ 沒有交接需求就不用管，按鈕會自動隱藏
 // ─── 交接名單按鈕生效時間（此時刻之前按鈕一律隱藏）───
@@ -285,8 +375,10 @@ let editingId = null;
 let sortCol = 'date';
 let sortAsc = false;
 let userSortActive = false; // ★ 只有使用者主動點欄位標題才設為 true
-let LOCKED_AGENT = null;    // ★ 業務專屬模式鎖定的姓名（不依賴下拉選單，確保一定生效）
+let LOCKED_AGENT = null;    // ★ 業務模式鎖定的姓名（由登入身分決定）
 let page = 1;
+let refreshTimer = null;
+let appBooted = false;
 const PAGE_SIZE = 50;
 
 // ─── 解析舊格式預約欄位 ───
@@ -342,22 +434,41 @@ function normalizeRecord(r) {
 }
 
 // ─── GOOGLE SHEETS API ───
+// 讀取改用 POST（帶 token），token 不會出現在網址列，也不會進瀏覽歷史。
 async function loadData() {
   setSyncStatus('loading');
   try {
-    const res = await fetch(API_URL);
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'list', token: getToken() })
+    });
     const json = await res.json();
-    if (json.ok) {
+    if (json && json.ok) {
+      if (json.me) AUTH = { name: json.me.name || '', all: !!json.me.all };
       records = json.data.filter(r => r.name && r.name !== '__deleted__').map(r => normalizeRecord(r));
       setSyncStatus('ok');
-    } else {
-      throw new Error('API error');
+      return 'ok';
     }
+    if (json && json.msg === 'auth_required') {
+      handleAuthExpired();
+      return 'auth';
+    }
+    throw new Error('API error');
   } catch(e) {
     setSyncStatus('error');
     showToast('無法連線到 Google Sheets，請確認網路', 'error');
     records = [];
+    return 'error';
   }
+}
+
+function handleAuthExpired() {
+  clearToken();
+  AUTH = null;
+  records = [];
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  showLogin('登入已過期，請重新輸入密碼');
 }
 
 async function apiCall(action, record) {
@@ -366,9 +477,18 @@ async function apiCall(action, record) {
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action, record })
+      body: JSON.stringify({ action, record, token: getToken() })
     });
     const json = await res.json();
+    if (json && json.ok === false && json.msg === 'auth_required') {
+      handleAuthExpired();
+      return null;
+    }
+    if (json && json.msg === 'forbidden') {
+      setSyncStatus('ok');
+      showToast('這筆不是你的名單，無法修改', 'error');
+      return null;
+    }
     setSyncStatus('ok');
     return json;
   } catch(e) {
@@ -381,6 +501,7 @@ async function apiCall(action, record) {
 function setSyncStatus(state) {
   const dot = document.getElementById('sync-dot');
   const label = document.getElementById('sync-label');
+  if (!dot || !label) return;
   if (state === 'ok') {
     dot.style.background = 'var(--success)';
     label.textContent = 'Google Sheets 同步中';
@@ -410,6 +531,8 @@ function dateToNum(dateStr) {
 
 // ─── 重複留單偵測 ───
 // OWNERSHIP_DAYS：客戶歸屬期（天）。期間內同一支電話再次留單，視為原業務的客戶。
+// ⚠️ 業務端登入後只拿得到自己的名單，所以這裡只偵測得到「自己」的重複留單。
+//    跨業務的重複偵測請用管理端（all 權限）帳號查看。
 const OWNERSHIP_DAYS = 180;
 let phoneIndex = {};   // 正規化電話 → [記錄]
 
@@ -549,7 +672,7 @@ function getFiltered() {
   const fDup = fDupEl ? fDupEl.value : '';
 
   const filtered = records.filter(r => {
-    // ★ 業務專屬模式：硬性鎖定，任何情況都只顯示該業務的名單
+    // ★ 業務模式：後端已過濾，這裡只是 UI 上的再確認
     if (LOCKED_AGENT && String(r.agent || '').trim() !== LOCKED_AGENT) return false;
     if (q && !`${r.name}${r.phone}${r.notes}${r.region}${r.agent}`.toLowerCase().includes(q)) return false;
     if (fStatus && r.status !== fStatus) return false;
@@ -1293,7 +1416,8 @@ function openModal(id) {
     document.getElementById('f-appt-time').value = '';
     document.getElementById('fg-appt').classList.remove('show');
     document.getElementById('f-media-input').value = '官網';
-    document.getElementById('f-agent-input').value = '';
+    // 業務模式：跑單欄位預設帶自己，後端也會強制寫成自己
+    document.getElementById('f-agent-input').value = LOCKED_AGENT || '';
     const today = new Date();
     document.getElementById('f-dispatch').value = (today.getMonth()+1) + '/' + today.getDate();
     document.getElementById('f-notes').value = '';
@@ -1338,6 +1462,7 @@ async function saveRecord() {
   };
 
   const action = editingId ? 'update' : 'add';
+  const wasEditing = editingId;
   if (editingId) {
     const idx = records.findIndex(r=>r.id===editingId);
     if (idx >= 0) records[idx] = rec;
@@ -1355,7 +1480,7 @@ async function saveRecord() {
       if (idx >= 0) records[idx].id = result.newId;
       rec.id = result.newId;
     }
-    showToast(editingId ? '已更新並同步到 Google Sheets ✓' : '已新增並同步到 Google Sheets ✓', 'success');
+    showToast(wasEditing ? '已更新並同步到 Google Sheets ✓' : '已新增並同步到 Google Sheets ✓', 'success');
     if (rec.status === '已預約' && rec.apptDate && rec.apptTime) {
       if (action === 'add') {
         await syncToCalendar(rec);
@@ -1395,13 +1520,18 @@ async function deleteRecord() {
   if (!editingId) return;
   if (!confirm('確認刪除此筆資料？')) return;
   const rec = records.find(r=>r.id===editingId);
+  const backup = records.slice();
   records = records.filter(r=>r.id!==editingId);
   closeModal();
   renderTable();
   showToast('刪除中…');
   const result = await apiCall('delete', rec);
-  if (result && result.ok) {
+  if (result && result.ok && result.msg === 'deleted') {
     showToast('已刪除並同步到 Google Sheets ✓', 'success');
+  } else {
+    // 後端拒絕或失敗 → 把資料放回來，避免畫面與 Sheets 不一致
+    records = backup;
+    renderTable();
   }
 }
 
@@ -1429,108 +1559,123 @@ function showToast(msg, type='success') {
   setTimeout(()=>t.classList.remove('show'), 2800);
 }
 
+// ─── 啟動流程 ───
+// 1. 有 token → 直接載入；token 失效 → 退回登入畫面
+// 2. 沒有 token → 顯示登入畫面，登入成功後才跑 bootApp()
 window.addEventListener('DOMContentLoaded', async () => {
+  // Enter 鍵送出登入
+  document.getElementById('login-code').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLoginSubmit();
+  });
+
+  if (!getToken()) { showLogin(); return; }
+  await bootApp();
+});
+
+async function bootApp() {
+  const lo = document.getElementById('loading-overlay');
+  if (lo) lo.style.display = '';
   setSyncStatus('loading');
-  await loadData();
 
-  const urlParams = new URLSearchParams(window.location.search);
-  // 身分判定順序：檔案寫死的 FORCE_AGENT 優先，其次才看網址參數。
-  // 寫死的好處：主畫面捷徑啟動時不依賴網址參數，iOS/Android 都不會失效。
-  let agentParam = FORCE_AGENT || urlParams.get('agent') || null;
-  if (agentParam === 'all' || agentParam === 'ALL') agentParam = null;
-  const statusParam = urlParams.get('status');
-  const mediaParam = urlParams.get('media');
+  const loadState = await loadData();
+  if (loadState === 'auth') return;   // token 失效，loadData 已經叫出登入畫面
+  // 'error'（純網路問題）仍繼續往下跑，讓畫面顯示連線失敗而不是卡在載入中
 
-  // 交接名單按鈕：生效時間若在 24 小時內，掛個計時器讓它自動亮起，不必重新整理
-  const _hoWait = HANDOVER_START - new Date();
-  if (_hoWait > 0 && _hoWait < 86400000) setTimeout(updateHandoverBtn, _hoWait + 1000);
+  // 業務模式判定：完全由登入身分決定，不看網址、不看 FORCE_AGENT
+  const isAgentMode = AUTH && !AUTH.all && AUTH.name;
 
-  renderTable();
+  if (!appBooted) {
+    appBooted = true;
 
-  if (agentParam) {
-    LOCKED_AGENT = String(agentParam).trim(); // ★ 啟用硬性鎖定
-    document.getElementById('f-agent').value = agentParam;
-    document.querySelector('.toolbar').style.display = 'none';
-    document.getElementById('stats-bar').style.display = 'none';
-    document.querySelectorAll('.btn-source').forEach(b => b.style.display = 'none');
+    // 交接名單按鈕：生效時間若在 24 小時內，掛個計時器讓它自動亮起，不必重新整理
+    const _hoWait = HANDOVER_START - new Date();
+    if (_hoWait > 0 && _hoWait < 86400000) setTimeout(updateHandoverBtn, _hoWait + 1000);
 
-    window.clearFilters = function() {
-      handoverOnly = false;
-      document.getElementById('search').value = '';
-      document.getElementById('f-status').value = '';
-      document.getElementById('f-media').value = '';
-      document.getElementById('f-date').value = '';
-      document.getElementById('f-year-filter').value = '';
-      sortCol = 'date'; sortAsc = false; userSortActive = false;
-      page = 1;
-      renderTable();
-    };
+    if (isAgentMode) {
+      LOCKED_AGENT = AUTH.name;
+      document.querySelector('.toolbar').style.display = 'none';
+      document.getElementById('stats-bar').style.display = 'none';
+      document.querySelectorAll('.btn-source').forEach(b => b.style.display = 'none');
 
-    const agentBar = document.createElement('div');
-    agentBar.style.cssText = 'padding:10px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg);border-bottom:1px solid var(--border);';
+      window.clearFilters = function() {
+        handoverOnly = false;
+        document.getElementById('search').value = '';
+        document.getElementById('f-status').value = '';
+        document.getElementById('f-media').value = '';
+        document.getElementById('f-date').value = '';
+        document.getElementById('f-year-filter').value = '';
+        sortCol = 'date'; sortAsc = false; userSortActive = false;
+        page = 1;
+        renderTable();
+      };
 
-    const searchInput = document.createElement('input');
-    searchInput.className = 'search-box';
-    searchInput.type = 'text';
-    searchInput.id = 'search-agent';
-    searchInput.placeholder = '搜尋姓名、電話、備註…';
-    searchInput.style.cssText = 'flex:1 1 200px;min-width:160px;max-width:340px;';
-    searchInput.addEventListener('input', function() {
-      document.getElementById('search').value = this.value;
-      renderTable();
-    });
+      const agentBar = document.createElement('div');
+      agentBar.style.cssText = 'padding:10px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg);border-bottom:1px solid var(--border);';
 
-    const statusSel = document.createElement('select');
-    statusSel.className = 'filter';
-    statusSel.id = 'f-status-agent';
-    ['', '待確認', '未接', '已來訪', '已預約', '無需求', '空號'].forEach(function(v) {
-      const opt = document.createElement('option');
-      opt.value = v;
-      opt.textContent = v || '全部狀況';
-      statusSel.appendChild(opt);
-    });
-    statusSel.addEventListener('change', function() {
-      document.getElementById('f-status').value = this.value;
-      renderTable();
-    });
+      const searchInput = document.createElement('input');
+      searchInput.className = 'search-box';
+      searchInput.type = 'text';
+      searchInput.id = 'search-agent';
+      searchInput.placeholder = '搜尋姓名、電話、備註…';
+      searchInput.style.cssText = 'flex:1 1 200px;min-width:160px;max-width:340px;';
+      searchInput.addEventListener('input', function() {
+        document.getElementById('search').value = this.value;
+        renderTable();
+      });
 
-    // 交接名單按鈕（沒有交接名單時自動隱藏，由 updateHandoverBtn 控制）
-    const handoverBtn = document.createElement('button');
-    handoverBtn.className = 'btn';
-    handoverBtn.id = 'btn-handover-agent';
-    handoverBtn.style.display = 'none';
-    handoverBtn.textContent = '📋 交接名單';
-    handoverBtn.addEventListener('click', toggleHandover);
+      const statusSel = document.createElement('select');
+      statusSel.className = 'filter';
+      statusSel.id = 'f-status-agent';
+      ['', '待確認', '未接', '已來訪', '已預約', '無需求', '空號'].forEach(function(v) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v || '全部狀況';
+        statusSel.appendChild(opt);
+      });
+      statusSel.addEventListener('change', function() {
+        document.getElementById('f-status').value = this.value;
+        renderTable();
+      });
 
-    const nameSpan = document.createElement('span');
-    nameSpan.style.cssText = 'font-size:13px;color:var(--accent);font-weight:600;margin-left:auto;';
-    nameSpan.textContent = '👤 ' + agentParam + ' 的名單';
+      // 交接名單按鈕（沒有交接名單時自動隱藏，由 updateHandoverBtn 控制）
+      const handoverBtn = document.createElement('button');
+      handoverBtn.className = 'btn';
+      handoverBtn.id = 'btn-handover-agent';
+      handoverBtn.style.display = 'none';
+      handoverBtn.textContent = '📋 交接名單';
+      handoverBtn.addEventListener('click', toggleHandover);
 
-    // 本週統計（約訪 / 到訪），內容由 updateAgentStats 填入
-    const weekStats = document.createElement('div');
-    weekStats.id = 'agent-week-stats';
-    weekStats.className = 'agent-week-stats';
+      const nameSpan = document.createElement('span');
+      nameSpan.style.cssText = 'font-size:13px;color:var(--accent);font-weight:600;margin-left:auto;';
+      nameSpan.textContent = '👤 ' + AUTH.name + ' 的名單';
 
-    agentBar.appendChild(searchInput);
-    agentBar.appendChild(statusSel);
-    agentBar.appendChild(handoverBtn);
-    agentBar.appendChild(weekStats);
-    agentBar.appendChild(nameSpan);
-    document.querySelector('.toolbar').insertAdjacentElement('afterend', agentBar);
+      // 本週統計（約訪 / 到訪），內容由 updateAgentStats 填入
+      const weekStats = document.createElement('div');
+      weekStats.id = 'agent-week-stats';
+      weekStats.className = 'agent-week-stats';
+
+      agentBar.appendChild(searchInput);
+      agentBar.appendChild(statusSel);
+      agentBar.appendChild(handoverBtn);
+      agentBar.appendChild(weekStats);
+      agentBar.appendChild(nameSpan);
+      document.querySelector('.toolbar').insertAdjacentElement('afterend', agentBar);
+    }
   }
-  if (statusParam) document.getElementById('f-status').value = statusParam;
-  if (mediaParam) document.getElementById('f-media').value = mediaParam;
 
   renderTable();
-  document.getElementById('loading-overlay').style.display = 'none';
+  if (lo) lo.style.display = 'none';
   showToast('名單已載入，共 ' + records.length + ' 筆', 'success');
 
-  setInterval(async () => {
-    await loadData();
-    renderTable();
-    showToast('資料已自動更新 ↻', 'success');
-  }, 3 * 60 * 1000);
-});
+  if (!refreshTimer) {
+    refreshTimer = setInterval(async () => {
+      const st = await loadData();
+      if (st !== 'ok') return;
+      renderTable();
+      showToast('資料已自動更新 ↻', 'success');
+    }, 3 * 60 * 1000);
+  }
+}
 
 function toggleApptField() {
   const status = document.getElementById('f-contact-status').value;
