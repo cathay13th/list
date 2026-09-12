@@ -287,7 +287,16 @@ document.body.insertAdjacentHTML('afterbegin', `
 
 // ⚠️⚠️⚠️ 這一行一定要換成「新部署」的網址 ⚠️⚠️⚠️
 // Apps Script → 部署 → 新增部署作業 → 網頁應用程式 → 部署 → 複製網址，貼到下面取代整串。
-const API_URL = 'PASTE_NEW_DEPLOYMENT_URL_HERE';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzd7gJOZ5zrpNbfQ_lQQ4aVp-oC0pp4IaYzD5CpMSlRDQ6j99WnFMY6MA4O699s_qiYUw/exec';
+
+// ─── 送出格式：FormData（簡單請求，不會觸發 CORS 預檢）───
+// 不要改回 JSON + Content-Type header，那會讓瀏覽器先送 OPTIONS 預檢，
+// 而 Apps Script 不回應預檢，結果就是前端看到「無法連線」。
+function buildPayload(obj) {
+  const fd = new FormData();
+  fd.append('payload', JSON.stringify(obj));
+  return fd;
+}
 
 // ─── 登入狀態 ───
 // 身分完全由密碼決定。殼檔的 window.FORCE_AGENT 已不再使用（留著無害）。
@@ -327,8 +336,7 @@ async function doLoginSubmit() {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'login', code: code })
+      body: buildPayload({ action: 'login', code: code })
     });
     const json = await res.json();
     if (json && json.ok && json.token) {
@@ -440,8 +448,7 @@ async function loadData() {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'list', token: getToken() })
+      body: buildPayload({ action: 'list', token: getToken() })
     });
     const json = await res.json();
     if (json && json.ok) {
@@ -476,8 +483,7 @@ async function apiCall(action, record) {
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action, record, token: getToken() })
+      body: buildPayload({ action, record, token: getToken() })
     });
     const json = await res.json();
     if (json && json.ok === false && json.msg === 'auth_required') {
