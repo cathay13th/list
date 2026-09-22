@@ -71,6 +71,10 @@ document.body.insertAdjacentHTML('afterbegin', `
     <div class="stat-num" id="s-week" style="color:var(--accent)">—</div>
     <div class="stat-label">本週新增</div>
   </div>
+  <div class="stat">
+    <div class="stat-num" id="s-week-reserved" style="color:var(--purple)">—</div>
+    <div class="stat-label">當週預約</div>
+  </div>
   <div class="stat" style="min-width:140px">
     <div class="stat-label">本週名單來源</div>
     <div class="stat-media-breakdown font-lg" id="s-week-media"></div>
@@ -917,6 +921,12 @@ function renderTable() {
     const lastWeekRecords = records.filter(r => inDispatchWeek(r, lastWeek.mon, lastWeek.sun));
     document.getElementById('s-week').textContent = thisWeekRecords.length;
     document.getElementById('s-lastweek').textContent = lastWeekRecords.length;
+
+    // 當週預約：當週派發的名單中，狀態已改為「已預約」的筆數
+    const sWeekReserved = document.getElementById('s-week-reserved');
+    if (sWeekReserved) {
+      sWeekReserved.textContent = thisWeekRecords.filter(r => r.status === '已預約').length;
+    }
 
     // 當日派發名單：派發日等於今天（且限定今年，避免 2025/2024 等歷年同一天被一併計入）
     const today = new Date();
