@@ -380,7 +380,7 @@ let handoverOnly = false;
 // ─── 在職業務清單（新增/編輯名單時，「跑單業務」欄位的下拉建議只出現這些人）───
 // ⚠️ 有人到職或離職，只要改這一行就好。上方篩選器的「全部業務」不受影響，
 //    仍會列出所有歷史業務，方便查詢離職同仁留下的舊名單。
-const ACTIVE_AGENTS = ['席育慧', '黃偉慈', '許智華', '林瑀霏'];
+const ACTIVE_AGENTS = ['許智華', '席育慧', '林瑀霏', '張詩敏'];
 const CURRENT_YEAR = 2026; // 當前主力年份，舊年份排最後
 let records = [];
 let editingId = null;
