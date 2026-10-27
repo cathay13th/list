@@ -251,6 +251,7 @@
   .badge-已來訪 { background: rgba(76,175,136,.15); color: #4caf88; border: 1px solid rgba(76,175,136,.25); }
   .badge-已預約 { background: rgba(139,111,212,.15); color: #8b6fd4; border: 1px solid rgba(139,111,212,.25); }
   .badge-無需求 { background: rgba(224,92,92,.15); color: #e05c5c; border: 1px solid rgba(224,92,92,.25); }
+  .badge-已成交 { background: rgba(184,134,11,.15); color: #b8860b; border: 1px solid rgba(184,134,11,.3); font-weight: 600; }
   .badge-空號 { background: rgba(92,90,86,.15); color: var(--text3); border: 1px solid rgba(92,90,86,.25); }
   .badge-default { background: rgba(255,255,255,.06); color: var(--text2); border: 1px solid var(--border); }
   /* 舊年份列淡化 */

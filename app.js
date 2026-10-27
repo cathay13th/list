@@ -56,6 +56,7 @@ document.body.insertAdjacentHTML('afterbegin', `
 <div class="stats-bar" id="stats-bar">
   <div class="stat"><div class="stat-num" id="s-total" style="color:var(--accent)">—</div><div class="stat-label">全部名單</div></div>
   <div class="stat"><div class="stat-num" id="s-visited" style="color:var(--success)">—</div><div class="stat-label">已來訪</div></div>
+  <div class="stat"><div class="stat-num" id="s-closed" style="color:#b8860b">—</div><div class="stat-label">已成交</div></div>
   <div class="stat"><div class="stat-num" id="s-reserved" style="color:var(--purple)">—</div><div class="stat-label">已預約</div></div>
   <div class="stat"><div class="stat-num" id="s-pending" style="color:var(--info)">—</div><div class="stat-label">待確認</div></div>
   <div class="stat"><div class="stat-num" id="s-missed" style="color:var(--warn)">—</div><div class="stat-label">未接</div></div>
@@ -93,6 +94,7 @@ document.body.insertAdjacentHTML('afterbegin', `
     <option>未接</option>
     <option>已來訪</option>
     <option>已預約</option>
+    <option>已成交</option>
     <option>無需求</option>
     <option>空號</option>
   </select>
@@ -194,6 +196,7 @@ document.body.insertAdjacentHTML('afterbegin', `
             <option>未接</option>
             <option>已來訪</option>
             <option>已預約</option>
+            <option>已成交</option>
             <option>無需求</option>
             <option>空號</option>
           </select>
@@ -911,6 +914,8 @@ function renderTable() {
   if (sTotal) {
     sTotal.textContent = records.length;
     document.getElementById('s-visited').textContent = records.filter(r=>r.status==='已來訪').length;
+    const sClosed = document.getElementById('s-closed');
+    if (sClosed) sClosed.textContent = records.filter(r=>r.status==='已成交').length;
     document.getElementById('s-reserved').textContent = records.filter(r=>r.status==='已預約').length;
     document.getElementById('s-pending').textContent = records.filter(r=>r.status==='待確認').length;
     document.getElementById('s-missed').textContent = records.filter(r=>r.status==='未接').length;
@@ -1084,7 +1089,7 @@ function populateFilters() {
 
 function badgeHtml(status) {
   if (!status) return '<span style="color:var(--text3)">—</span>';
-  const cls = ['待確認','未接','已來訪','已預約','無需求','空號'].includes(status) ? 'badge-'+status : 'badge-default';
+  const cls = ['待確認','未接','已來訪','已預約','已成交','無需求','空號'].includes(status) ? 'badge-'+status : 'badge-default';
   return `<span class="badge ${cls}">${esc(status)}</span>`;
 }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -1133,7 +1138,7 @@ function getSourceStats(scope) {
     });
 }
 
-const STATUS_ORDER = ['已預約','已來訪','待確認','未接','無需求','空號','未填寫'];
+const STATUS_ORDER = ['已成交','已預約','已來訪','待確認','未接','無需求','空號','未填寫'];
 
 function renderSourceStats() {
   const stats = getSourceStats(sourceScope);
@@ -1155,7 +1160,7 @@ function renderSourceStats() {
     const items = STATUS_ORDER
       .filter(st => g.status[st])
       .map(st => {
-        const cls = ['待確認','未接','已來訪','已預約','無需求','空號'].includes(st) ? 'badge-'+st : 'badge-default';
+        const cls = ['待確認','未接','已來訪','已預約','已成交','無需求','空號'].includes(st) ? 'badge-'+st : 'badge-default';
         return `<span class="badge ${cls}">${esc(st)} ${g.status[st]}</span>`;
       }).join('');
     return `
@@ -1298,7 +1303,7 @@ function renderLastWeekModal() {
   const stCount = countBy(recs, r => r.status || '未填寫');
   const stEl = document.getElementById('lw-status');
   const stItems = STATUS_ORDER.filter(st => stCount[st]).map(st => {
-    const cls = ['待確認','未接','已來訪','已預約','無需求','空號'].includes(st) ? 'badge-'+st : 'badge-default';
+    const cls = ['待確認','未接','已來訪','已預約','已成交','無需求','空號'].includes(st) ? 'badge-'+st : 'badge-default';
     return `<span class="badge ${cls}">${esc(st)} ${stCount[st]}</span>`;
   });
   // 補上不在 STATUS_ORDER 內的自訂狀況
@@ -1642,7 +1647,7 @@ async function bootApp() {
       const statusSel = document.createElement('select');
       statusSel.className = 'filter';
       statusSel.id = 'f-status-agent';
-      ['', '待確認', '未接', '已來訪', '已預約', '無需求', '空號'].forEach(function(v) {
+      ['', '待確認', '未接', '已來訪', '已預約', '已成交', '無需求', '空號'].forEach(function(v) {
         const opt = document.createElement('option');
         opt.value = v;
         opt.textContent = v || '全部狀況';
